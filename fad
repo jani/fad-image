@@ -1,0 +1,61 @@
+#!/usr/bin/perl
+
+# FAD (fetch and display) image viewer
+
+# Copyright 2024 Jan Ingvoldstad
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+use feature qw(say);
+
+$main::VERSION = '1.0.0';
+
+# Configurable variables
+
+my $fetcher = '/usr/bin/curl';
+my $viewer = '/usr/bin/eog';
+my $directprefix = 'https://i.';
+my $tmpdir = '/tmp';
+
+for my $exe (($fetcher,$viewer)) {
+    if (!-x $exe) {
+	die "$viewer does not exist or is not executable for this user.\n";
+    }
+}
+my $url = shift;
+my $dl_file = '';
+
+if (index($url,$directprefix) == 0 and $url =~ m,$directprefix\w+\.\w+/(\w+\.(?:png|jpe?g))$,i) {
+    # Direct image link
+    $dl_file = $tmpdir.'/'.$1;
+    if ($debug) { say "$fetcher -s -o $dl_file -q $url"; }
+    system (qq($fetcher -s -o $dl_file -q $url)) == 0 or die "Failed fetching imgur image: $?\n";
+}
+elsif ($url =~ m,https://(\w+\.\w+)/(\w+)$,) {
+    # Indirect image link
+    my ($domain,$base) = ($1,$2);
+    for my $suf (qw(png jpeg jpg)) {
+	$dl_file = $tmpdir.'/'.$base.'.'.$suf;
+	my $fetchurl = $directprefix.$domain.'/'.$base.'.'.$suf;
+	if ($debug) { say "$fetcher -s -o $dl_file -q $fetchurl"; }
+	if (system (qq($fetcher -s -o $dl_file -q $fetchurl)) == 0) {
+	    # If the downloaded file exists and has a size greater than zero, we are probably good
+	    last if (-f $dl_file && -s $dl_file);
+	}
+    }
+}
+else {
+    die "Invalid image URL.\n";
+}
+
+if (!-f $dl_file) {
+    die "No image file at $dl_file\n";
+}
+if (!-s $dl_file) {
+    die "Empty file at $dl_file\n";
+}
+system (qq($viewer $dl_file)) == 0 or die "Failed displaying image $dl_file: $?\n";
